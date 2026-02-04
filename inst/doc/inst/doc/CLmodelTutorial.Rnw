@@ -1,0 +1,992 @@
+%\VignetteIndexEntry{Tutorial}
+%\VignettePackage{CCLmodeltU}
+%\VignetteKeyword{Tutorial}
+
+\documentclass[11pt]{article}
+
+\usepackage{amssymb,stmaryrd}
+\usepackage{amsmath,amsbsy}
+
+\usepackage{epsfig,fullpage}
+\usepackage{graphicx}
+\usepackage[authoryear,round]{natbib}
+\usepackage{hyperref}
+\usepackage{Sweave}
+
+\newcommand{\real}{\mathbb{R}}
+\newcommand{\argmin}{\mbox{arg min}}
+\newcommand{\argmax}{\mbox{arg max}}
+\newcommand{\ttt}[1]{\texttt{#1}}
+
+\newcommand{\beq}{\begin{equation}}
+\newcommand{\eeq}{\end{equation}}
+\newcommand{\bea}{\begin{eqnarray}}
+\newcommand{\eea}{\end{eqnarray}}
+\newcommand{\beas}{\begin{eqnarray*}}
+\newcommand{\eeas}{\end{eqnarray*}}
+\newcommand{\bx}{\mathbf{x}}
+\newcommand{\bX}{\mathbf{X}}
+\newcommand{\bbeta}{\boldsymbol{\beta}}
+\newcommand{\bzero}{\mathbf{0}}
+\newcommand{\bone}{\mathbf{1}}
+\newcommand{\bu}{\mathbf{u}}
+\newcommand{\bU}{\mathbf{U}}
+\newcommand{\by}{\mathbf{y}}
+\newcommand{\bz}{\mathbf{z}}
+
+\newcommand{\tpi}{\tilde{\pi}}
+\newcommand{\tx}{\tilde{x}}
+
+\parindent 0in
+
+\bibliographystyle{abbrvnat}
+
+\begin{document}
+\SweaveOpts{concordance = TRUE}
+
+\title{\bf \ttt{CLmodel} Package: Overview and Examples}
+\author{Anthony Almudevar$^1$}
+
+\maketitle
+
+\begin{center}
+1. Department of Biostatistics and Computational Biology, University of Rochester
+%\url{https://www.urmc.rochester.edu/biostat/people/faculty/almudevar.cfm}
+\end{center}
+
+\tableofcontents
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Model Definition}\label{sec.model.def}
+
+The \ttt{R} package \ttt{CLmodel} implements the compound logistic binary model described in \cite{almudevar2019}. We are given a vector of binary responses $\by = (y_1,\ldots,y_n)$ (all vectors are intepretable as column vectors in the context of linear algebra).
+<<fig = F,echo = TRUE>>= 
+library(CLmodel)
+@
+The general form of an $m$ component model is given by 
+\beq
+\pi_i = P(y_i = 1) = H(\pi_{i1}, \ldots, \pi_{im}),\,\,\, i = 1,\ldots,n,  \label{eq.CL.model}
+\eeq
+where $H$ is a function of $m$ variables, which possesses all continuous first-order partial derivatives. We assume the model depends on a vector of parameters $\bbeta \in \real^p$. Then let $\bx_{ik} \in \real^p$, $k = 1,\ldots, m$, be $m$ predictor vectors paired with response $y_i$. The components of the model are then 
+\beq
+\pi_{ik} = \phi\left(\bbeta^T \bx_{ik}\right),\,\,\, k = 1,\ldots,m, \label{eq.CL.model.component}
+\eeq
+where $\phi(u) = (1+\exp(-u))^{-1}$ is the logistic function. \\
+
+Note that this is the most general form of the model, in the sense that a single element $\beta_j$ of $\bbeta$ may appear in more than one component. However, it may be more natural to regard each component $\pi_{ik}$ as defining a distinct logistic regression model with parameter vector $\bbeta_k \in \real^{p_k}$ and predictor vector $\bu_{ik} \in \real^{p_k}$, $k = 1,\ldots,m$,  where the number of predictors $p_k$ associated with the components may vary. This type of model can be expressed in the form \eqref{eq.CL.model.component} by setting
+$$
+\bbeta = [ \bbeta_1 \mid \bbeta_2 \mid \ldots \mid \bbeta_m]
+$$
+and
+$$
+\bx_{ik} = [ \, \bzero \mid \ldots \mid \bu_{ik} \mid \ldots \mid \bzero \, ],\,\,\, k = 1,\ldots,m,
+$$
+where the subvector $\bu_{ik}$ of $\bx_{ik}$ occupies the same columns as does the subvector $\bbeta_k$ of $\bbeta$. We use the general form throughout, using the preceding conversion if needed.  \\
+
+Thus, each element $y_i$ is associated with $m$ predictor vectors $\bx_{ik} \in \real^p$, $k = 1,\ldots,m$. Then $\bX_k$ is the $n \times p$ matrix with $i$th row equal to $\bx_{ik}$. \\
+
+
+For convenience, let $\theta\in\Theta\subset\real^q$ be the collection of all model parameters.  
+We can write interchangeably $\pi_i = \pi_i(\theta)$, $\pi_{ik} = \pi_{ik}(\theta)$, $i = 1, \ldots, n$; $k = 1, \ldots,m$. We may also express the response function in vector form, in particular, $\tpi = \tpi(\theta) = (\pi_1(\theta),\ldots,\pi_n(\theta))$, $\tpi_k = \tpi_k(\theta) = (\pi_{1k}(\theta),\ldots,\pi_{nk}(\theta))$, $k = 1,\ldots,m$. 
+
+\subsection{COP model definition}\label{sec.cop.model.def}
+
+The COP model is a slight modification of the component-wise linear model defined by \eqref{eq.CL.model}-\eqref{eq.CL.model.component}. In addition to the response vector $\by$, parameter vector $\bbeta$ and predictor matrices $\bX_k$ defined above, a \emph{COP variable}  $\bz = (z_1,\ldots,z_n)$ and parameter $\alpha \in \real$ are introduced into the first component 
+\beq
+\pi_{i1} = \phi\left( g(\alpha)(z_i   - \bbeta^T \bx_{i1})\right), \label{eq.COP.component}
+\eeq
+where $g(\alpha)$ is a positive increasing function of $\alpha$, and $z_i$ represents the appropriate element of $\bz$  (in the \ttt{CLmodel} package $g(\alpha) = \exp(\alpha)$ is used). The other components remain the same as \eqref{eq.CL.model.component}. Here, the parameter $\theta$ includes $\alpha$ as well as the coefficient vector $\bbeta$. 
+
+\subsection{Distributional properties of the response vector}
+
+The choice of model fitting method is primarily determined by the correlation structure of the responses. We let $V_\theta$ be the $n \times n$ covariance matrix of the response vector $\by$, where $\theta\in\Theta\subset\real^q$ is the collection of all model parameters.  \\
+
+
+\textbf{Independent responses.} Let $D_\theta$ be $n \times n$ diagonal matrix with $i$th diagonal element $[D_\theta ]_{ii} = \tau_i = \pi_i(1-\pi_i)$, Then $V_\theta = D_\theta$. \\
+
+
+\textbf{Correlated responses.} Let $R$ be $n \times n$ correlation matrix of response vector $y$. Then 
+\beq
+V_\theta = D_\theta^{1/2} R D_\theta^{1/2} \label{eq.v.theta}
+\eeq
+Note that considerable simplification follows when $R$ does not depend on $\theta$. If $R$ is itself unknown (as is usually the case), a two-step procedure may be followed. An intital estimate of $\theta$ may be calculated, provisionally assuming independent responses, permitting  an estimate of $R$. Then $R$ may be used to refine the estimate of $\theta$, and is in any case necessary for the estimation of standard errors. It is usually a practical necessity to adopt some parametric form for $R$.
+
+\subsection{Exchangeable correlation}\label{sec.exchangeable.correlation}
+
+Currently, \ttt{CLmodel} implements an exchangable correlation model for response vector $\by$. Groups are assumed to be defined by levels of an $n$-dimensional factor \ttt{group}. Within-group responses are assumed to have pairwise correlation $\rho$. 
+
+
+\section{Model Fitting and Estimation - Theoretical Overview}
+
+A number of model fitting methods are available in \ttt{CLmodel}. 
+
+\subsection{Quasi-likelihood estimation}
+
+The model defined in Section \ref{sec.model.def} is not in general an exponential family model, and so methods associated with generalized linear models (GLM) or generalized estimating equations cannot be applied directly. However, quasi-likelihood methods \citep{wedderburn1974}, on which much of the preceding theory is based, may be used, leading to a similar set of inference methods. Suppose we are given responses $\by$, with mean vector $\tpi(\theta)$ and covariance matrix $V_\theta$ dependent on parameter $\theta \in \Theta \subset \real^q$. Let $W$ be an $n \times n$ positive definite weight matrix. Let $\hat{\theta}_{QL}$ be the unique solution (if it exists) to the $q$-dimensional system of equations
+\beq
+G(\theta) = \Gamma_\theta^T W^{-1} \left[ \by - \tpi(\theta) \right] = \vec{0}. \label{eq.ql.sys.eq}
+\eeq
+where 
+$$
+\Gamma_\theta = \left[ \frac{\partial \tpi(\theta)}{\partial \theta_1} \hdots \frac{\partial \tpi(\theta)}{\partial \theta_m} \right].
+$$
+Note that $W$ may depend on $\theta$. It can be shown that as $n \rightarrow \infty$, $\hat{\theta}_{QL}$ exists with probability approaching 1, with asymptotic distribution
+\beq
+\hat{\theta} \sim N(\theta, \Sigma^W_\theta) \label{asymptotic.distribution.2}
+\eeq
+where
+\beq
+\Sigma^W_\theta =  \left[ \Gamma_\theta^T  W^{-1} \Gamma_\theta  \right]^{-1}  \left[ \Gamma_\theta^T  W^{-1} V_{\theta} W^{-1} \Gamma_\theta  \right]   \left[ \Gamma_\theta^T  W^{-1} \Gamma_\theta  \right]^{-1}. \label{eq.sig.w}
+\eeq
+Note that \eqref{eq.sig.w} yields the important special case 
+\beq
+\Sigma_\theta =  \Sigma^{V_\theta}_\theta =   \left[ \Gamma_\theta^T  V_\theta^{-1} \Gamma_\theta \right]^{-1}. \label{eq.sig.v}
+\eeq
+Inference proceeds using the approximation $\Sigma^W_\theta \approx \Sigma^W_{\hat{\theta}_{QL}}$. 
+
+\subsubsection{Maximum Likelihood for independent responses}
+
+For independent responses the maximum likelihood function is 
+\beq
+L(\theta)  =  \sum_{i = 1}^n y_i \log( \pi_i) + (1-y_i)   \log(1 -  \pi_i), \label{ll.function}
+\eeq
+It is easily shown that where the maximum likelihood estimate 
+\beq
+\hat{\theta}_{MLE} = \argmax_\theta  L(\theta) \label{eq.mle}
+\eeq
+is a stationary point of $L(\theta)$, it satisfies the system of equations \eqref{eq.ql.sys.eq} where $W = D_\theta$. Therefore, the asymptotic distribution of $\theta_{MLE}$ is given by \eqref{asymptotic.distribution.2} after substituting $W = D_\theta$. 
+
+\subsubsection{Model estimation for correlated responses}
+
+A number of procedures are available when responses $y$ are correlated, that is, the covariance matrix $V_\theta$ is given by \eqref{eq.v.theta} where $R$ is a general covariance matrix. The quasi-likelihood method is sufficiently flexible in that the maximum likelihood estimate $\hat{\theta}_{MLE}$, based on likelihood function \eqref{ll.function}, may be used even if independence does not hold. This is because it is equivalent to the quasi-likelihood estimate, formally the solution $\hat{\theta}_{QL}$ to equations \eqref{eq.ql.sys.eq} where $W = D_\theta$, which then possesses asymptotic distribution  
+$$
+\hat{\theta}_{QL} \sim N(\theta, \Sigma^{D_\theta}_\theta).
+$$
+Estimation of $\Sigma^{D_\theta}_\theta$ requires an estimate of $V_\theta$, which in turn requires an estimate $\hat{R} \approx R$. Given  estimate $\hat{\theta}_{QL}$, we may calculate  estimates of the mean and variance $\hat{\pi}_i$,   $\hat{\tau}_i$  for each response $y_i$, yielding Pearson residuals
+\beq
+\hat{r}_i = \frac{y_i - \hat{\pi}_i}{\hat{\tau}_i^{1/2}}. \label{pearsons.correlation}
+\eeq
+The residuals can be used to calculate estimate $\hat{R} \approx R$. A parametric model is almost always used for this (Section \ref{sec.exchangeable.correlation}). At this point,  $\hat{R}$ is taken as fixed, giving 
+\beq
+V_\theta \approx  D_\theta^{1/2} \hat{R} D_\theta^{1/2}. \label{eq.ql.vtheta}
+\eeq
+This approximation, with $D_\theta$, is substituted into \eqref{eq.sig.w}, so that the covariance of $\hat{\theta}_{QL}$ is estimated by 
+$$
+\Sigma^{D_\theta}_\theta \approx \Sigma^{D_\theta}_{\hat{\theta}_{QL}}.
+$$
+
+It is also possible, once $\hat{R}$ is obtained in this way, to set $W$ in \eqref{eq.ql.sys.eq} equal to the approximation \eqref{eq.ql.vtheta}, in order to recalculate the quasi-likelihood estimate, yielding  $\hat{\theta}^\prime_{QL}$.  In this case, the covariance matrix of the estimate is calculated using \eqref{eq.sig.v} and \eqref{eq.ql.vtheta}, yielding
+$$
+\Sigma_\theta \approx \Sigma_{\hat{\theta}^\prime_{QL}}.
+$$
+
+\subsection{Confidence bounds for fitted curves}
+
+There will be interest in estimating curves $\pi(z;x)$, interpreted as the expected response $E[y]$ as a function of the COP variable $z \in \real$, with any remaining covariates $x \in \real^q$, $q \geq 1$,  held fixed.  The asymptotic marginal variance is given by  
+\beq
+\sigma^2_{\hat{\pi}(z;x)}  = \left[\frac{\partial \pi(z;x)}{\partial \theta}\right]^T   \Sigma_\theta  \left[\frac{\partial \pi(z;x)}{\partial \theta}\right].  \label{eq.confidence.band}
+\eeq
+The package \ttt{CLmodel} implements marginal confidence bands of user specified confidence level.  In \cite{cox1995} it is shown that a simultaneous $1-\alpha$ confidence band results when the critical value $(\chi^2_{m,\alpha})^{1/2}$ from a $\chi^2$ distribution with $m$ degrees of freedom is used.
+
+
+\section{Model Fitting and Estimation - Using the \ttt{CLmodel} Package}
+
+To demonstrate the various functions of the \ttt{CLmodel} package, we will introduce a relatively straightforward model. Let $\by = (y_1, \ldots, y_n)$ be a binary response vector, and let $\tx = (x_1, \ldots, x_n)$ be a single predictor variable. We first consider the standard logistic regression model,
+\beq
+\pi_i = \phi\left(\beta_0 + \beta_1 x_i\right),\,\,\, i = 1,\ldots,n. \label{eq.example1.01}
+\eeq
+Of course, this model has the usual asymptotes at 0 and 1. Suppose instead we model the asymptotes 0 and $\lambda \in (0,1)$, where $\lambda$ is a parameter to be estimated. This is easily done by incorporating the parameter $\lambda$ into \eqref{eq.example1.01}, yielding the modfied model 
+\beq
+\pi_i = \lambda \times \phi\left(\beta_1 + \beta_2 x_i\right). \label{eq.example1.02}
+\eeq
+Of course, this is a simple example of a two-component compound logistic model. Using the notation of Section \ref{sec.model.def} we have
+\bea
+\bbeta & = & (\beta_1, \beta_2, \beta_3), \nonumber \\
+\bx_{i1} & = & (1,x_i,0), \nonumber \\
+\bx_{i2} & = & (0,0,1), \label{eq.example.model.def.1}
+\eea
+which define the components 
+\bea
+\pi_{i1} & = & \phi\left(\bbeta^T\bx_{i1}\right) = \phi\left(\beta_1 + \beta_2 x_i\right), \nonumber  \\
+\pi_{i2} & = & \lambda = \phi\left(\bbeta^T\bx_{i2}\right) = \phi(\beta_3), \label{eq.example.model.def.2}
+\eea
+so that $\lambda$ is estimated using the log-odds parametrization $\beta_3 = \log(\lambda/(1-\lambda))$. \\
+
+When fitting a compound logistic model, the function $H$ which defines the model \eqref{eq.CL.model} must be given explicitly, as well as its partitial derivatives, in this case,
+\bea
+H(\pi_1,\pi_2) & = & \pi_1 \times \pi_2, \nonumber \\
+\frac{\partial H}{\partial\pi_1} & = & \pi_2, \nonumber \\
+\frac{\partial H}{\partial\pi_2} & = & \pi_1. \label{eq.example.model.def.3}
+\eea
+
+\subsection{Utilities for formatting predictor variables}
+
+\ttt{CLmodel} contains a few simple utilities to convert predictor variables into the correct format. Suppose in the current example we have $n = 4$ samples, with predictor variable $\tilde{x} = (1.2, 3.4, 7.6, 8.2)$. Then the design matrices for the components would be 
+$$
+\bX_1 = \left[ \begin{array}{ccc} 1 & 1.2 & 0 \\ 1 & 3.4 & 0 \\ 1 & 7.6 & 0 \\ 1 & 8.2 & 0 \end{array} \right] \,\,\,\,\,\,\mbox{and}\,\,\,\,\,\,
+\bX_2 = \left[ \begin{array}{ccc} 0 & 0 & 1 \\ 0 & 0 & 1 \\ 0 & 0 & 1 \\ 0 & 0 & 1  \end{array} \right]
+$$
+The function \ttt{fit.CL.make.xmatrices} accepts a list of $m$ matrices, where $m$ is the number of model components. The $k$th matrix is an $n \times p_k$ matrix with column vectors representing predictor variables associated with the $k$th component. This should include the intercept term if needed. Note that this function cannot be used when a parameter appears in more than one component. However, the same predictor variable may be used in more than one component. 
+
+<<fig = F,echo = TRUE>>= 
+
+###
+### Predictor variable
+###
+
+x = c(1.2, 3.4, 7.6, 8.2)
+
+###
+### Intercept 
+###
+
+x0 = rep(1,4)
+
+###
+### Create design matrices in format required by CLmodel functions
+###
+
+x.list = list(cbind(x0,x),x0)
+fit.CL.make.xmatrices(x.list)
+@
+
+We may also create specialized parameter labels with the function \ttt{fit.CL.covariate.labels}, with subscripts indicating component index and paremeter index within component. 
+
+<<fig = F,echo = TRUE>>= 
+
+### There are 2 parameters for component 1, and 1 parameter for component 2.  
+
+pattern = c(2,1)
+fit.CL.covariate.labels(pattern, cop.flag = FALSE) 
+@
+This gives alternative indexing conventions $(\beta_1, \beta_2, \beta_3) = (\beta[1,1],  \beta[1,2], \beta[2,1])$. 
+
+\subsection{Using the main model function \ttt{fit.CL}}
+
+To demonstrate the main model function \ttt{fit.CL} we load the data list \ttt{sampleDataCLmodel} included in the \ttt{CLmodel} package.
+
+<<fig = F,echo = TRUE>>= 
+
+data(sampleDataCLmodel)
+names(sampleDataCLmodel)
+length(sampleDataCLmodel$y)
+@
+
+This object contains data, with $n = 1000$ observations,  which may be used to fit the two-component model defined by Equations \eqref{eq.example.model.def.1}-\eqref{eq.example.model.def.2}. The response vector is contained in \ttt{sampleDataCLmodel\$y}. The single predictor variable is stored in \ttt{sampleDataCLmodel\$x.cop}. However, this variable is already incorporated in the list of design matrices \ttt{sampleDataCLmodel\$x.covariates}, in which the rows are formatted according to \eqref{eq.example.model.def.1}:
+
+<<fig = F,echo = TRUE>>= 
+
+head(sampleDataCLmodel$x.covariates[[1]])
+head(sampleDataCLmodel$x.covariates[[2]])
+@
+
+We may create labels with the \ttt{fit.CL.covariate.labels} utilities:
+
+<<fig = F,echo = TRUE>>= 
+
+est.labs = fit.CL.covariate.labels(c(2,1))
+est.labs
+@
+
+The model function $H(\pi_1,\pi_2)$ and its derivatives (see Equation \eqref{eq.example.model.def.3}) are included in the list \ttt{sampleDataCLmodel} as \ttt{R} functions: 
+
+<<fig = F,echo = TRUE>>= 
+
+sampleDataCLmodel$h.func
+sampleDataCLmodel$h.prime.func
+@
+
+The function $H$ is represented by the list element \ttt{sampleDataCLmodel\$h.func}, which is a function that accepts a numeric vector of length 2, then evaluates and outputs the value of $H$. The partial derivatives are stored as a list of functions \ttt{sampleDataCLmodel\$h.prime.func} (one function for each component), each of which accepts a numeric vector of length 2, then evaluates and outputs the value of the corresponding partial derivative. \\
+
+Finally, we note that where needed we set the value \ttt{sampleDataCLmodel\$cop.flag = FALSE}, since we are not using the COP model defined in Section \ref{sec.cop.model.def}. 
+
+\subsection{Initial values}
+
+An initial estimate for the parameter $\bbeta$ must be supplied. The \ttt{CLmodel} package contains a utility function \ttt{fit.CL.init} for generating an initial heuristic fit from which an initial parameter value may be constructed. The initital  model is based on  a response vector $\by$ and a single predictor variable $\tilde{x} = (x_1, \ldots, x_n)$ of the same length, and takes the form 
+$$
+\pi_i = a_1 [1 - \phi(\alpha(x_i - x_{thr}))] + a_2 \phi(\alpha(x_i - x_{thr})), \,\,\, i = 1,\ldots, n
+$$
+where $\theta = (\alpha, a_1, a_2, x_{thr})$ is the four dimensional parameter to be estimated. The response is essentially a logistic response function in which the asymptotes 0 and 1 have been replaced by $a_1$ and $a_2$. The convention used here is to constrain $\alpha > 0$, so that $a_1$ is the asymptote approached as $x_i \rightarrow -\infty$. This loses no generality, since the response function is increasing (or decreasing) if $a_2 > a_1$ (or $a_2 < a_1$).  \\
+
+The function \ttt{fit.CL.init} requires the response vector and a single predictor variable. In most cases, the parameter $\theta = (\alpha, a_1, a_2, x_{thr})$ fit by the function \ttt{fit.CL.init} will have to be transformed to conform to the appropriate model parametrization defined in Section \ref{sec.model.def}.  For example, the model \eqref{eq.example.model.def.1}-\eqref{eq.example.model.def.2} uses a three-dimensional parameter $\bbeta = (\beta_1, \beta_2, \beta_3)$. The reparametrization would take the form 
+\beas
+\beta_1 & = & -\alpha x_{thr} \\
+\beta_2 & = & \alpha  \\
+\beta_3 & = & \log(a_2/(1-a_2))
+\eeas
+if $a_2 > a_1$, and
+\beas
+\beta_1 & = & \alpha x_{thr} \\
+\beta_2 & = & -\alpha  \\
+\beta_3 & = & \log(a_1/(1-a_1))
+\eeas
+if $a_1 > a_2$. Since it is assumed that one asymptote is 0, only $\max\{a_1, a_2\}$ is used for the initial estimate.  The function \ttt{fit.CL.init} optionally accepts a function \ttt{init.function} which accepts four numerical parameters $(\alpha, a_1, a_2, x_{thr})$ and outputs a single reparametrized vector $\bbeta$. If \ttt{init.function} is not provided, a vector of initial estimates of parameters  $(\alpha, a_1, a_2, x_{thr})$ will be output. \\
+
+In the current example, using the sample data list \ttt{sampleDataCLmodel}, an initial estimate would be produced as follows: 
+
+<<fig = F,echo = TRUE>>= 
+
+init.obj = fit.CL.init(sampleDataCLmodel$y,sampleDataCLmodel$x.cop)
+init.obj
+init.est = c(-init.obj[4]*init.obj[1],
+             init.obj[1],
+             log(init.obj[3]/(1-init.obj[3])))
+init.est
+@
+Here, it was anticipated that $a_2 > a_1$. 
+
+\subsection{Using the main fitting function \ttt{fit.CL}}
+
+We now have all the elements needed to fit a compound logistic model. Continuing with the current example the fit is produced in the following way:
+
+<<fig = F,echo = TRUE>>= 
+
+fit.CL.obj <- fit.CL(y = sampleDataCLmodel$y,
+                     x.cop = NULL,
+                     x.covariates = sampleDataCLmodel$x.covariates,
+                     group = NULL,
+                     initial.estimate = init.est, 
+                     h.func = sampleDataCLmodel$h.func, 
+                     h.prime.func = sampleDataCLmodel$h.prime.func,
+                     cop.flag = FALSE, 
+                     exchangeable = FALSE, 
+                     quasi.lik = FALSE, 
+                     lambda = 0.0, 
+                     linear.comb = NULL, 
+                     est.labs = est.labs, 
+                     control = list(reltol = 1e-14))
+
+###
+### Generic summary function for S3 class = fit.CL 
+###
+
+summary(fit.CL.obj)
+
+###
+### Simple fit function
+###
+
+fit.CL.simple(y = sampleDataCLmodel$y,
+              x.cop = NULL,
+              x.covariates = sampleDataCLmodel$x.covariates,
+              group = NULL,
+              initial.estimate = init.est, 
+              h.func = sampleDataCLmodel$h.func, 
+              h.prime.func = sampleDataCLmodel$h.prime.func,
+              cop.flag = FALSE, 
+              exchangeable = FALSE, 
+              quasi.lik = FALSE, 
+              lambda = 0.0, 
+              est.labs = est.labs, 
+              control = list(reltol = 1e-14))
+
+@
+
+Since the option \ttt{cop.flag = FALSE} is selected, the COP model is not fit (Section \ref{sec.cop.model.def}), so the argument \ttt{x.cop} need not be provided. Also note that a simple version of \ttt{fit.CL} is included, which outputs only the parameter estimates. \\
+
+The responses are assumed to be independent, so the option \ttt{exchangeable = FALSE} is specified. Currently, only the exchangeable correlation model is supported, which would also require input of the group variable  \ttt{group}. If this is not provided, the responses are assumed to be independent, regardless of the value of the \ttt{exchangeable} option. \\ 
+
+The \ttt{quasi.lik} option is used when the exchangeble correlation model is requested. The option \ttt{lambda} is used to define ridge regression model fits. If this parameter is zero, then the unpenalized least squares fit is calculated. \\
+
+The \ttt{fit.CL} function outputs an S3 object of class \ttt{fit.CL}, for which a generic summary function \ttt{summary.fit.CL} is included in the \ttt{CLmodel} package, which provides the standard parameter estimate table. 
+ 
+\subsection{Using the COP fit option}
+
+It is possible to reparametrize the model \eqref{eq.example.model.def.1}-\eqref{eq.example.model.def.2} as a COP model (Section \eqref{sec.cop.model.def}):
+$$
+\pi = \lambda \times \phi\left( e^\alpha(x - x_{thr}) \right). 
+$$
+To fix ideas, we are assuming that $\pi$ is an increasing function of what is now the COP varable $x$. If $(\beta_1^\prime, \beta_2^\prime, \beta_3^\prime)$ are the parameters of Equation \eqref{eq.example.model.def.2}, the parametric transformation between the COP and non-COP models is then 
+\beas
+\alpha & = & \log(\beta_2^\prime), \\
+x_{thr} & = & -\beta_1^\prime/\beta_2^\prime, \\
+\lambda & = & \phi(\beta_3^\prime).
+\eeas
+Under the COP model parametrization the variable $x$ is not included in the component predictor matrices, which are now the $n \times 2$ matrices 
+$$
+\bX_1 = \left[ \begin{array}{ccc} 1  & 0 \\ 1 &  0 \\ \vdots & \vdots \\ 1  & 0 \end{array} \right] \,\,\,\,\,\,\mbox{and}\,\,\,\,\,\,
+\bX_2 = \left[ \begin{array}{ccc}  0 & 1 \\  0 & 1 \\ \vdots & \vdots \\ 0 & 1   \end{array} \right].
+$$
+Other than $\alpha$, the  COP model components are then models the threshold parameter, that is, 
+\beas
+x_{thr} &=& \bbeta^T \bx_1 \\ 
+\log(\lambda/(1-\lambda)) &=& \bbeta^T \bx_2, 
+\eeas
+where $\bx_i$ is a row of $\bX_i$, $i = 1,2$.  \\
+
+Specialized labels for the COP model can be obtained using the \ttt{cop.flag = TRUE} option:
+
+<<fig = F,echo = TRUE>>= 
+
+est.labs = fit.CL.covariate.labels(c(1,1), cop.flag = TRUE)
+est.labs
+@
+Note that the scale parameter $\alpha$ is included as the first element of parameter $\theta = (\alpha, \beta_1, \beta_2)$. \\
+
+An initial estimate can now be obtained as follows 
+<<fig = F,echo = TRUE>>= 
+
+init.obj = fit.CL.init(sampleDataCLmodel$y,sampleDataCLmodel$x.cop)
+init.obj
+init.est = c(log(init.obj[1]), 
+             init.obj[4], 
+             log(init.obj[3]/(1-init.obj[3])))
+init.est
+@
+
+The prediction matrices now only include intercept terms in the appropriate columns, but these must be explicitly constructed.
+
+<<fig = F,echo = TRUE>>= 
+
+###
+### Sample size
+###
+
+data(sampleData)
+n = length(sampleDataCLmodel$y)
+
+###
+### Intercept term
+###
+
+x0 = rep(1,n)
+
+###
+### Create design matrices in format required by CLmodel functions
+###
+
+x.list = list(x0, x0)
+x.covariates = fit.CL.make.xmatrices(x.list)
+head(x.covariates[[1]])
+head(x.covariates[[2]])
+@
+
+Refit the model with option \ttt{cop.flag = TRUE}: 
+<<fig = F,echo = TRUE>>= 
+
+fit.CL.obj.COP <- fit.CL(y = sampleDataCLmodel$y, 
+                         x.cop = sampleDataCLmodel$x.cop, 
+                         x.covariates = x.covariates, 
+                         group = NULL,
+                         initial.estimate = init.est, 
+                         h.func = sampleDataCLmodel$h.func, 
+                         h.prime.func = sampleDataCLmodel$h.prime.func,
+                         cop.flag = TRUE, 
+                         exchangeable = FALSE, 
+                         quasi.lik = FALSE, 
+                         lambda = 0.0, 
+                         linear.comb = NULL, 
+                         est.labs = est.labs, 
+                         control = list(reltol = 1e-14))
+
+###
+### Fit summary
+###
+
+summary(fit.CL.obj.COP)
+
+###
+### summary for non-COP model
+###
+
+summary(fit.CL.obj)
+@
+The summary from the previous (non-COP) model is included above for comparison. As expected, the parameter \ttt{b[2,1]} has the same interpretation for both models, and the estimate is the same value \Sexpr{signif(fit.CL.obj.COP$coef[3],5)} for each fit. For the COP model, \ttt{b[1,1]} = \Sexpr{signif(fit.CL.obj.COP$coef[2],5)}  is the estimate of $x_{thr}$. This parameter  can be expressed using  the non-COP model parameters by $x_{thr} =  -\beta_1/\beta_2$, estimated by -\ttt{b[1,1]}/\ttt{b[1,2]} = -\Sexpr{signif(fit.CL.obj$coef[1],5)}/\Sexpr{signif(fit.CL.obj$coef[2],5)} =  -\Sexpr{signif(fit.CL.obj$coef[1]/fit.CL.obj$coef[2],5)}, using the \ttt{cop.flag = FALSE} option.  This is the same estimate obtained using the \ttt{cop.flag = TRUE} option. For the COP model the estimate of $\alpha$ is \ttt{alpha} = \Sexpr{signif(fit.CL.obj.COP$coef[1],5)}. This parameter is sexpressed using the non-COP model by $\alpha = \log(\beta_2)$. The estimate of $\beta_2$ from the non-COP fit is \ttt{b[1,2]} = \Sexpr{signif(fit.CL.obj$coef[2],5)}, which provides the equivalent estimate $\log(\Sexpr{signif(fit.CL.obj.COP$coef[1],5)}) = \Sexpr{signif(log(fit.CL.obj.COP$coef[1]),5)}$ of $\alpha$.
+
+\subsection{The \ttt{prediction} method for CL models}
+
+The \ttt{CLmodel} package contains a \ttt{predict} method for the \ttt{fit.CL} class output by the \ttt{fit.CL} function. This method calculates fitted values for the fitted model summarized in a \ttt{fit.CL} class object. If argument \ttt{newdata = NULL}, the fitted values will be those corresponding to the original predictor variables. Alternatively, fitted values for new predictor variables can be calculated by including them in the argument \ttt{newdata}. If the \ttt{cop.flag = TRUE} option was used to produce the \ttt{fit.CL} class object then \ttt{newdata} must be a list of the form \ttt{list(x.cop, x.covariates)}. Otherwise, \ttt{newdata} can be either a list with an element labelled \ttt{x.covariates}, or a \ttt{covariates} type object itself. \\
+
+In either case, the \ttt{predict} method outputs an $n \times 4$ matrix, where $n$ is the number of design points. The first two columns contain the fitted values and their standard errors, while the last two columns contain lower and upper $1 - \alpha$ confidence bounds for the fit. The option \ttt{alpha.crit} is used to specify $\alpha$, with default \ttt{alpha.crit = 0.05}. The critical value used to construct the confidence bounds is $(\chi^2_{p,\alpha})^{1/2}$, where $p$ is the model degrees of freedom \citep{cox1995}. 
+
+In the next example, the fitted curve is plotted using am evenly spaced grid. 
+ 
+<<fig = T,echo = TRUE>>= 
+
+library(CLmodel)
+data(sampleDataCLmodel)
+
+###
+### fit using regular model
+###
+
+est.labs = fit.CL.covariate.labels(c(2,1))
+init.obj = fit.CL.init(sampleDataCLmodel$y,sampleDataCLmodel$x.cop)
+init.est = c(-init.obj[4]*init.obj[1],
+             init.obj[1],
+             log(init.obj[3]/(1-init.obj[3])))
+fit.CL.obj <- fit.CL(y = sampleDataCLmodel$y,
+                     x.cop = NULL,
+                     x.covariates = sampleDataCLmodel$x.covariates,
+                     group = NULL,
+                     initial.estimate = init.est, 
+                     h.func = sampleDataCLmodel$h.func, 
+                     h.prime.func = sampleDataCLmodel$h.prime.func,
+                     cop.flag = FALSE, 
+                     exchangeable = FALSE, 
+                     quasi.lik = FALSE, 
+                     lambda = 0.0, 
+                     linear.comb = NULL, 
+                     est.labs = est.labs, 
+                     control = list(reltol = 1e-14))
+
+###
+### Fit summary
+###
+
+summary(fit.CL.obj)
+
+###
+### Construct grid on which to plot fitted curve
+###
+
+xgrid = seq(-2, 2, 0.1)
+
+###
+### Intercept 
+###
+
+x0 = rep(1,length(xgrid))
+
+###
+### Create design matrices 
+###
+
+x.list = list(cbind(x0,xgrid),x0)
+x.covariates = fit.CL.make.xmatrices(x.list)
+
+###
+### calculate then plot fitted curve on grid
+###
+
+mu.est = predict(fit.CL.obj, newdata = x.covariates)
+matplot(xgrid, mu.est[,c(1,3,4)], ylim = c(0,1), lty = c(1,2,2),
+        col = 'black',type = 'l', xlab = 'x',ylab = 'Predicted Curve')
+legend('topleft',legend=c('Predicted Curve','95% Confidence Bounds'),
+       lty=1:2,col='black')
+@
+
+
+\section{Compound Logistic Model with Two Varying Asymptotes}
+
+In this section we consider a second example which will demonstrate additional features of the COP package. Let $x$ be a single predictor variable. Then consider the response function
+$$
+\pi = a_1 \left[ 1 - \phi\left(b + c x\right) \right] + a_2 \phi\left(b + c x \right) 
+$$
+where $a_1, a_2 \in [0,1]$. It is important to first note that the model is not uniquely specified. If $b,c$ are multiplied by $-1$ then and $a_1, a_2$ exchanged, the resulting model is identical. We may equivalently  use the COP model, 
+\beq
+\pi = a_1 \left[ 1 - \phi\left(e^{\alpha} (x - x_{thr})\right) \right] + a_2 \phi\left(e^{\alpha} (x - x_{thr})\right), \label{eq.two.asymptote.1}
+\eeq
+which is identical, but removes this ambiguity. Now, $a_1, a_2$ are the lower and upper asymptotes, and $\pi$ is an increasing or decreasing function of  $x$ when $a_2 > a_1$ or $a_1 < a_2$. \\
+
+To express \eqref{eq.two.asymptote.1} as a compound logistic model, we set
+\beq
+\pi = H(\pi_1, \pi_2, \pi_3) = \pi_2(1-\pi_1) + \pi_3 \pi_1, \label{eq.two.asymptote.2}
+\eeq
+where 
+\beas
+\pi_1 & = & \phi\left(e^{\alpha} (x - \beta_1)\right) \\
+\pi_2 & = & a_1 = \phi(\beta_2), \\
+\pi_3 & = & a_2 = \phi(\beta_3). 
+\eeas
+The model parameters are now $\theta = (\alpha, \beta_1, \beta_2, \beta_3)$. \\
+
+A natural inference problem would be to detect and estimate differences between the asymptotes $a_1, a_2$. A natural method for this is to estimate the linear combination 
+$$
+\beta_3 - \beta_2 = \log(a_2/(1-a_2)) -  \log(a_1/(1-a_1))
+$$
+which is simply the log-odds ratio for $a_2$ and $a_1$. The \ttt{fit.CL} function will provide estimates and standard errors for any linear combinations of parameters. 
+
+
+\subsection{Simulation utilities}
+
+A simulation utility is included with the \ttt{CLmodel} package. Here, we will create a simulation for the model \eqref{eq.two.asymptote.1}. We need to create an object representing the compound logistic function $H$ given in \eqref{eq.two.asymptote.2} and its derivatives, as follows:
+
+<<fig = F,echo = TRUE>>= 
+
+h.func = function(p) {p[2]*(1-p[1]) + p[3]*p[1]}
+hdev1 = function(p) {-p[2]+p[3]}
+hdev2 = function(p) {1-p[1]}
+hdev3 = function(p) {p[1]} 
+h.prime.func = list(hdev1 = hdev1, hdev2 = hdev2, hdev3 = hdev3)
+@
+
+We can then create a COP variable with $n = 1000$, confined to the interval $x \in [-3,3]$:
+
+<<fig = F,echo = TRUE>>= 
+
+set.seed(543876)
+n.sample = 1000
+x.cop = runif(n.sample,-3,3)
+@
+
+The predictor matrices are constructed as follows:
+
+<<fig = F,echo = TRUE>>= 
+
+x1 = rep(1,n.sample)
+x.covariates = fit.CL.make.xmatrices(list(x1,x1,x1))
+@
+
+Since the \ttt{cop.flag = TRUE} option will used, the COP variable will be a separate object. In our simulation, we will assume $\alpha = 3$, $x_{thr} = 1$, $a_1 = 0.75$, $a_2 = 0.1$. The parameter will be of the form
+$$
+\theta = (\alpha, x_{thr}, \log(a_1/(1-a_1)), \log(a_2/(1-a_2)) = (\alpha, \beta_1, \beta_2, \beta_3).
+$$
+
+In order to simulate data for this model, the fitted  values must first be calculated, which may be done using the \ttt{fit.CL.fitted.values} function. This function accepts as input a parameter vector and a list containing the remaining model elements. 
+
+<<fig = T,echo = TRUE>>= 
+
+true.par = c(3,1,log(0.75/0.25),log(0.1/0.9))
+parms = list(x.cop = x.cop, 
+             x.covariates = x.covariates, 
+             h.func = h.func, 
+             h.prime.func = h.prime.func, 
+             cop.flag = TRUE)
+mu = fit.CL.fitted.values(true.par,parms)$mu
+plot(x.cop, mu, ylim = c(0,1), xlab = 'x', ylab = 'Fitted Values')
+@
+
+The fitted values may then be used to simulate a response vector using the \ttt{fit.CL.sim.data} function:
+
+<<fig = F,echo = TRUE>>= 
+ymat = fit.CL.sim.data(mu,1)
+y = ymat[1,]
+@
+
+Here, no correlation model is used, so the responses are independent. Furthermore, only a single replication was requested. Whatever the number of replications requested, the \ttt{fit.CL.sim.data} function outputs a matrix, each row representing a single replication.  
+
+\subsection{GOF test}
+
+A goodness-of-fit test is implemented in the function \ttt{fit.CL.GOF} included with the \ttt{CLmodel}. The null model is standard logistic regression. A response vector \ttt{y} and predictor variables \ttt{x.data} must be included. The \ttt{x.data} object may be a numeric vector, matrix or data frame. An exchangeable correlation model may be used if a group variable \ttt{group} is included. The null distribution is generated by bootstrap replications from an estimated standard logistic model with response \ttt{y} and all predictor variables included in \ttt{x.data}. The number of replications is given by the argument \ttt{nboot}. Note that the initial estimate is included in the bootstrap replications, so that the minimum estimated $P$-value is, appropriately, $P = 1/\ttt{nboot}$. The GOF function is demonstrated below:
+
+<<fig = F,echo = TRUE>>= 
+fit.CL.GOF.obj = fit.CL.GOF(y,x.cop)
+fit.CL.GOF.obj
+@
+
+The estimated $P$-value is $P = \Sexpr{signif(fit.CL.GOF.obj$p.value,7)}$, so we may reject the standard logistic regression model. 
+
+\subsection{Fitting the model}
+
+We can use the main \ttt{fit.CL} function to fit the model, while including an estimate for  $\beta_3 - \beta_2$. Estimates for linear combinations of the parameters can be requested using the \ttt{linear.comb} argument of \ttt{fit.CL}. This is a $L \times p$ matrix, where $L$ is the number of linear combinations, and $p$ is the number of parameters. Each row of \ttt{linear.comb} represents a linear combination. The model parameter is $\theta = (\alpha, \beta_1, \beta_2, \beta_3)$, so for our example, the  \ttt{linear.comb} argument would be the single row matrix 
+$$
+A = [ 0\,\,0\,\,-1\,\,1]
+$$
+
+
+<<fig = F,echo = TRUE>>= 
+
+###
+### Creat labels
+###
+
+est.labs = fit.CL.covariate.labels(c(1,1,1),cop.flag = TRUE)
+est.labs
+
+###
+### Create matrix of linear combinations (labels can be introduced as row labels for this matrix)
+###
+
+linear.comb = matrix(c(0,0,-1,1),nrow = 1)
+rownames(linear.comb) = c('b[3,1] - b[2,1]')
+
+###
+### Get initial estmate
+###
+
+init.obj = fit.CL.init(y,x.cop)
+lodds = function(x) {log(x/(1-x))}
+init.est = c(log(init.obj[1]), 
+             init.obj[4], 
+             lodds(init.obj[2]), 
+             lodds(init.obj[3]))
+
+###
+### create \ttt{fit.CL} class object containing fit 
+###
+
+fit.CL.obj <- fit.CL(y = y,
+                     x.cop = x.cop,
+                     x.covariates = x.covariates,
+                     group = NULL,
+                     initial.estimate = init.est, 
+                     h.func = h.func, 
+                     h.prime.func  = h.prime.func,
+                     cop.flag = TRUE, 
+                     exchangeable = FALSE, 
+                     quasi.lik = FALSE, 
+                     lambda = 0.0, 
+                     linear.comb = linear.comb, 
+                     est.labs = est.labs, 
+                     control = list(reltol = 1e-14))
+
+###
+### Fit summary
+###
+
+summary(fit.CL.obj)
+@
+
+
+
+\section{Modeling Correlation}
+
+Currently, the \ttt{CLmodel} package supports an exchangeable correlation model. We will also include an additional covariate. Assume $n = 1000$, consisting of 5 repeated measures from 200 subjects. An exchangeable correlation parameter of $\rho = 0.1$ will be assumed. In addition, assume the age of each subject is given as $z$ (uniformly distributed on the interval (20,75)).  \\
+
+The following code simulates a COP variable, and the subject ages. It is advisable to center any covariate at 0, so that the coefficient estimate is independent of the intercept estimate. 
+
+<<fig = F,echo = TRUE>>= 
+
+library(CLmodel)
+set.seed(543876)
+n.sample = 1000
+x.cop = runif(n.sample, -3, 3)
+
+agei = runif(200, 20, 75)
+agea = rep(agei,each = 5)
+agec = agea - mean(agea)
+sub.id = rep(1:200, each = 5)
+
+@
+
+The model can be written, using double subscripts to identify the model compoments, 
+\beq
+\pi = H(\pi_1, \pi_2, \pi_3) = \pi_2(1-\pi_1) + \pi_3 \pi_1, \label{eq.two.asymptote.4}
+\eeq
+where 
+\beas
+\pi_1 & = & \phi\left(e^{\alpha} (x - \beta_{11} - \beta_{12}z) \right) \\
+\pi_2 & = & \phi\left(\beta_{21} + \beta_{22}z) \right), \\
+\pi_3 & = & \phi\left(\beta_{31} + \beta_{32}z) \right). \\
+\eeas
+The model parameter is now $\theta = (\alpha, \beta_{11}, \beta_{12}, \beta_{21}, \beta_{22}, \beta_{31}, \beta_{32})$. The covariate $z$ is included in each model component, although the associated coefficient is different in each (as discussed above, it would be possible to constrain these coefficients to be equal, or otherwise not linearly independent). It is interesting to note that the threshold parameter $x_{thr}$ is now an embedded linear model $x_{thr} = \beta_{11} + \beta_{12}z$. Here we will take at the true parameters
+\beas
+\alpha & = & 1, \\
+(\beta_{11}, \beta_{12}) & = & (1, 1/25), \\
+(\beta_{21}, \beta_{22}) & = & (\log(0.75/0.25), 0), \\
+(\beta_{31}, \beta_{32}) & = & (\log(0.25/0.75), -1/25).
+\eeas
+
+Next, set up the model data:
+
+<<fig = F,echo = TRUE>>= 
+
+###
+### Model function
+###
+
+h.func = function(p) {p[2]*(1-p[1]) + p[3]*p[1]}
+hdev1 = function(p) {-p[2]+p[3]}
+hdev2 = function(p) {1-p[1]}
+hdev3 = function(p) {p[1]} 
+h.prime.func = list(hdev1 = hdev1, hdev2 = hdev2, hdev3 = hdev3)
+
+###
+### Format predictor variables
+###
+
+x1 = rep(1,n.sample)
+x2 = agec
+x.obj = fit.CL.make.xmatrices(list(cbind(x1,x2),cbind(x1,x2),cbind(x1,x2)))
+est.labs = fit.CL.covariate.labels(c(2,2,2), cop.flag = TRUE)
+parms = list(x.cop = x.cop, 
+             x.covariates = x.obj, 
+             h.func = h.func, 
+             h.prime.func = h.prime.func, 
+             group = sub.id, 
+             cop.flag = TRUE)
+@
+
+Next, simulate model data
+
+<<fig = F,echo = TRUE>>= 
+
+true.par = c(1,0,1/25,log(0.75/0.25),0,log(0.25/0.75),-1/25)
+rho = 0.1
+mu = fit.CL.fitted.values(true.par,parms)$mu
+ymat = fit.CL.sim.data(mu,1,sub.id,rho)
+y = ymat[1,]
+@
+
+Do a GOF test. 
+
+<<fig = F,echo = TRUE>>= 
+
+fit.CL.GOF(y, cbind(x.cop, agec), group = sub.id, nboot = 50)
+@
+
+To construct an initial solution, assume the coefficients associated with covariate $z$ equal zero (if this is done, covariates should be centered at zero).
+
+<<fig = F,echo = TRUE>>= 
+
+init.obj = fit.CL.init(y,x.cop) 
+init.est = c(log(init.obj[1]), 
+             init.obj[4], 
+             0, 
+             lodds(init.obj[2]), 
+             lodds(init.obj[3]), 0)
+
+###
+### Model assuming independent responses 
+###
+
+fit.CL.obj.u = fit.CL(y = y,
+                      x.cop = x.cop,
+                      x.covariates = x.obj,
+                      group = sub.id,
+                      initial.estimate = true.par, 
+                      h.func = h.func, 
+                      h.prime.func = h.prime.func, 
+                      cop.flag = T, 
+                      exchangeable = F, 
+                      quasi.lik = F, 
+                      lambda = 0.0, 
+                      linear.comb = NULL, 
+                      est.labs = est.labs, 
+                      control = list(reltol = 1e-14))
+
+summary(fit.CL.obj.u)
+
+###
+### Ordinary least squares fit. Estimates are constructed assuming 
+### independence with standard errors incorporating the
+### correlation model. 
+###
+
+fit.CL.obj.ex = fit.CL(y = y,
+                       x.cop = x.cop,
+                       x.covariates = x.obj,
+                       group = sub.id,
+                       initial.estimate = true.par, 
+                       h.func = h.func, 
+                       h.prime.func = h.prime.func, 
+                       cop.flag = T, 
+                       exchangeable = T, 
+                       quasi.lik = F, 
+                       lambda = 0.0, 
+                       linear.comb = NULL, 
+                       est.labs = est.labs, 
+                       control = list(reltol = 1e-14))
+
+summary(fit.CL.obj.ex)
+
+###
+### Quasilikelihood method. 
+###
+
+fit.CL.obj.ql = fit.CL(y = y,
+                       x.cop = x.cop,
+                       x.covariates = x.obj,
+                       group = sub.id,
+                       initial.estimate = true.par, 
+                       h.func = h.func, 
+                       h.prime.func = h.prime.func, 
+                       cop.flag = T, 
+                       exchangeable = T, 
+                       quasi.lik = T, 
+                       lambda = 0.0, 
+                       linear.comb = NULL, 
+                       est.labs = est.labs, 
+                       control = list(reltol = 1e-14))
+
+summary(fit.CL.obj.ql)
+@
+
+The three fitting methods differ by the settings of the logical arguments \ttt{exchangeable} and \ttt{quasi.lik}. Because the responses are correlated, the model \ttt{fit.CL.obj.u} fit with options  \ttt{exchangeable = FALSE} and \ttt{quasi.lik = FALSE} (the independent response model) is clearly inappropriate. Model \ttt{fit.CL.obj.ex} is fit with options  \ttt{exchangeable = TRUE} and \ttt{quasi.lik = FALSE}. This model is fit assuming independent responses, however, the standard errors incorporate estimated correlation. Accordingly, the parameter estimates for models \ttt{fit.CL.obj.u} and \ttt{fit.CL.obj.ex} are identical. However, the standard errors differ. As would be expected, those in model \ttt{fit.CL.obj.ex} are generally larger, since they account for subject level correlation. \\
+
+The estimating equations used for model \ttt{fit.CL.obj.ql} differ from the other two fits, so the estimates differ, although not substantially. This method is more efficient for correlated data than ordinary least squares method, so the standard errors tend to be smaller, and so is the recommended method for correlated responses.  \\
+
+Note that a common method of estimating correlation $\rho$ is used when  \ttt{exchangeable = TRUE}. In our example, this estimate is $\Sexpr{signif(fit.CL.obj.ql$cor.est,5)}$, close to the true value $\rho = 0.1$. 
+
+\subsection{Model Selection}
+
+The AIC and BIC scores are calculated for the independent response model, and QIC and QICu scores are calculated for the quasilikelihood model (AIC and BIC are not intepretable for correlated data). Here, we continue the current example, constructing a fit which deletes the age 
+
+<<fig = F,echo = TRUE>>= 
+
+###
+### Include only intercept terms in x.covariates object
+###
+
+x.obj = fit.CL.make.xmatrices(list(x1,x1,x1))
+est.labs = fit.CL.covariate.labels(c(1,1,1), cop.flag = TRUE)
+
+###
+### reformat initial solution
+###
+
+lodds = function(x) {log(x/(1-x))}
+true.par.000 = c(log(init.obj[1]), 
+                 init.obj[4], 
+                 lodds(init.obj[2]), 
+                 lodds(init.obj[3]))
+
+###
+### Fit model without age covariate
+###
+
+fit.CL.obj.ql.000 = fit.CL(y = y,
+                           x.cop = x.cop,
+                           x.covariates = x.obj,
+                           group = sub.id,
+                           initial.estimate = true.par.000, 
+                           h.func = h.func, 
+                           h.prime.func = h.prime.func, 
+                           cop.flag = T,
+                           exchangeable = T, 
+                           quasi.lik = T, 
+                           lambda = 0.00, 
+                           linear.comb = NULL,
+                           est.labs = est.labs, 
+                           control = list(reltol = 1e-14))
+
+
+summary(fit.CL.obj.ql.000)
+@
+
+In the full model QIC $ =  \Sexpr{signif(fit.CL.obj.ql$qic.cl,7)}$, QICu $ =  \Sexpr{signif(fit.CL.obj.ql$qicu.cl,7)}$, and in the reduced model QIC $ =  \Sexpr{signif(fit.CL.obj.ql.000$qic.cl,7)}$, QICu $ =  \Sexpr{signif(fit.CL.obj.ql.000$qicu.cl,7)}$, so by the QIC score, the full model is preferred.
+
+\subsection{Ridge Regression and Cross-Validation}
+
+The \ttt{CLmodel} package supports ridge regression. The least-squares crtierion is modified to
+$$
+\Gamma = SSE + \lambda \theta^T\theta.
+$$
+An equivalent form is used for the quasi-likelihood method. The penalty parameter $\lambda$ is specified by the \ttt{lambda} argument in the \ttt{fit.CL} or \ttt{fit.CL.simple} function. This parameter may be selected using cross-validation using the \ttt{fit.CL.cv} function. Apart from those arguments used for fir \ttt{fit.CL} function, the $K$-fold parameter must be supplied in the \ttt{k.cv} argument. If \ttt{k.cv = NULL} then $K = n$, the sample size of the data, which is equivalent to leave-one-out cross-validation (LOOCV). Three GOF scores are available. The argument \ttt{lambda} can be a vector of values for which cross-validated scores will be calculate. 
+
+<<fig = T,echo = TRUE>>= 
+
+x.obj = fit.CL.make.xmatrices(list(cbind(x1,x2),cbind(x1,x2),cbind(x1,x2)))
+est.labs = fit.CL.covariate.labels(c(2,2,2), cop.flag = TRUE)
+
+lambda.list = seq(0,1,0.1)
+fit.CL.cv.obj = fit.CL.cv(y = y,
+                          x.cop = x.cop,
+                          x.covariates = x.obj,
+                          group = sub.id,
+                          initial.estimate = true.par, 
+                          h.func = h.func, 
+                          h.prime.func = h.prime.func, 
+                          cop.flag = T, 
+                          exchangeable = T, 
+                          quasi.lik = T,  
+                          lambda = lambda.list, 
+                          k.cv = 2, 
+                          gof.score.type = 'dev',  
+                          est.labs = est.labs, 
+                          control = list(reltol = 1e-14))
+
+###
+### display table, and plot dev against lambda
+###
+
+fit.CL.cv.obj
+plot(fit.CL.cv.obj$cv.table,type = 'b',xlab = 'lambda',ylab = 'dev')
+@
+
+
+
+\bibliography{copVignette}
+\end{document}
