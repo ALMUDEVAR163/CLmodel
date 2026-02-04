@@ -60,7 +60,7 @@
 
 \section{Model Definition}\label{sec.model.def}
 
-The \ttt{R} package \ttt{CLmodel} implements the compound logistic binary model described in \cite{almudevar2019}. We are given a vector of binary responses $\by = (y_1,\ldots,y_n)$ (all vectors are intepretable as column vectors in the context of linear algebra).
+The \ttt{R} package \ttt{CLmodel} implements the compound logistic binary model described in \cite{almudevar2026}. We are given a vector of binary responses $\by = (y_1,\ldots,y_n)$ (all vectors are intepretable as column vectors in the context of linear algebra).
 <<fig = F,echo = TRUE>>= 
 library(CLmodel)
 @
