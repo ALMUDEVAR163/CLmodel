@@ -1,0 +1,12 @@
+Package: CLmodel
+Type: Package
+Title: Compound Logistic Regression
+Version: 1.2
+Date: 2026-01-14
+Author: Anthony Almudevar, Department of Biostatistics and Computational Biology, University of Rochester
+Maintainer: <anthony_almudevar@urmc.rochester.edu>
+Imports: Matrix, bindata, rootSolve, geepack
+Description: Fits compound logistic regression model. 
+License: GPL (>= 2)
+NeedsCompilation: no
+Packaged: 2019-07-28 15:55:36 UTC; anthonyalmudevar

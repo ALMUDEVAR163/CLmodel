@@ -1,0 +1,10 @@
+export(fit.CL,fit.CL.fitted.values,fit.CL.init,
+fit.CL.sim.data,fit.CL.GOF,fit.CL.simple,fit.CL.cv,
+fit.CL.covariate.labels, fit.CL.make.xmatrices,
+predict.fit.CL,summary.fit.CL)
+
+importFrom(Matrix,Matrix)
+importFrom(geepack,geeglm)
+importFrom(stats,glm,pnorm,qnorm,qchisq)
+S3method("summary", "fit.CL")
+S3method("predict", "fit.CL")
